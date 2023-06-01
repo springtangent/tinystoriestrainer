@@ -1,3 +1,8 @@
+# training data and results
+train_dataset
+results
+TinyStories*.txt
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
