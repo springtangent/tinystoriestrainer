@@ -5,15 +5,11 @@ print(torch.__version__)
 
 from transformers import GPTNeoConfig, GPTNeoForCausalLM, TextDataset, DataCollatorForLanguageModeling, AutoTokenizer
 from transformers import Trainer, TrainingArguments
-from datasets import load_dataset
-import logging
-import pickle
+from datasets import load_dataset, load_from_disk
 
 CHECKPOINT = None # 'results/checkpoint-684000'
 
-logging.basicConfig(level=logging.INFO)
-
-# This maatchs the TinyStories-1M configuration
+# This matchs the TinyStories-1M configuration
 configuration = GPTNeoConfig(
     vocab_size=50257,
     max_position_embeddings=2048,
@@ -38,11 +34,14 @@ tokenizer = AutoTokenizer.from_pretrained("EleutherAI/gpt-neo-125M", eos_token='
 tokenizer.pad_token = tokenizer.eos_token
 data_collator = DataCollatorForLanguageModeling(tokenizer=tokenizer, mlm=False)
 
-from datasets import load_from_disk
-
 data = load_from_disk("train_dataset")
+
+print(f"Size of training dataset: {data['train'].num_rows} examples")
+print(f"Size of validation dataset: {data['test'].num_rows} examples")
+
 train_dataset = data["train"]
 test_dataset = data["test"]
+
 
 training_args = TrainingArguments(
     output_dir="./results",
@@ -50,12 +49,12 @@ training_args = TrainingArguments(
     num_train_epochs=4,
     per_device_train_batch_size=4,
     per_device_eval_batch_size=4,
-    eval_steps=6000,
+    eval_steps=40000,
     weight_decay=0.01,
     max_grad_norm=1.0,
     evaluation_strategy='steps',
     # save_strategy='epoch',  # The model and tokenizer will be saved at the end of each epoch
-    save_steps=6000,
+    save_steps=10000,
     warmup_steps=500,
     fp16 = True
 )
