@@ -3,7 +3,7 @@ from transformers import GPTNeoForCausalLM, AutoTokenizer
 TEMPERATURE = 0.8
 
 model = GPTNeoForCausalLM.from_pretrained("./results")
-tokenizer = GPT2Tokenizer.from_pretrained("./results")
+tokenizer = AutoTokenizer.from_pretrained("./results")
 tokenizer.pad_token = tokenizer.eos_token
 
 

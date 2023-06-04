@@ -77,8 +77,7 @@ training_args = TrainingArguments(
     # save_strategy='epoch',  # The model and tokenizer will be saved at the end of each epoch
     save_steps=10000,
     warmup_steps=500,
-    fp16 = True, 
-    optim="adafactor"
+    fp16 = True
 )
 
 trainer = Trainer(
