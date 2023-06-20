@@ -1,4 +1,5 @@
 from transformers import GPTNeoForCausalLM, AutoTokenizer
+from settings import MAX_LENGTH
 
 TEMPERATURE = 0.8
 
@@ -14,7 +15,7 @@ def llm(prompt: str) -> str:
 
 	# Generate text
 	print('generating text')
-	generated_text = model.generate(input_ids, attention_mask=attention_mask, max_length=2048, num_return_sequences=1, no_repeat_ngram_size=2, temperature=TEMPERATURE)
+	generated_text = model.generate(input_ids, attention_mask=attention_mask, max_length=MAX_LENGTH, num_return_sequences=1, no_repeat_ngram_size=2, temperature=TEMPERATURE)
 
 	# Decode the generated text
 	return tokenizer.decode(generated_text[0], skip_special_tokens=True)

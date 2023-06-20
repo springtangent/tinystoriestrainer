@@ -1,5 +1,5 @@
 import os
-os.environ['PYTORCH_CUDA_ALLOC_CONF'] = 'max_split_size_mb:250'
+os.environ['PYTORCH_CUDA_ALLOC_CONF'] = 'max_split_size_mb:500'
 os.environ["WANDB_DISABLED"] = "true"
 import torch
 from transformers import GPTNeoConfig, GPTNeoForCausalLM, TextDataset, DataCollatorForLanguageModeling, AutoTokenizer
@@ -8,7 +8,7 @@ from datasets import load_dataset, load_from_disk
 from settings import MAX_LENGTH, END_OF_TEXT
 import gc
 import pynvml
-
+from optimum.bettertransformer import BetterTransformer
 
 def print_gpu_utilization():
     pynvml.nvmlInit()
@@ -30,7 +30,7 @@ CHECKPOINT = None # 'results/checkpoint-684000'
 configuration = GPTNeoConfig(
     vocab_size=50257,
     max_position_embeddings=MAX_LENGTH,
-    hidden_size=64,
+    hidden_size=768,
     num_layers=8,
     num_heads=16,
     activation_function="gelu_new",
@@ -45,7 +45,9 @@ configuration = GPTNeoConfig(
 print_gpu_utilization()
 
 # Create a new model
-model = GPTNeoForCausalLM(configuration).to('cuda')
+model = GPTNeoForCausalLM(configuration)
+model.to('cuda')
+model = BetterTransformer.transform(model)
 
 print_gpu_utilization()
 
@@ -68,17 +70,20 @@ training_args = TrainingArguments(
     output_dir="./results",
     overwrite_output_dir=True,
     num_train_epochs=1,
-    per_device_train_batch_size=1,
-    per_device_eval_batch_size=1,
-    eval_steps=40000,
+    gradient_accumulation_steps=2,
+    per_device_train_batch_size=2,
+    per_device_eval_batch_size=2,
+    eval_steps=10000,
     weight_decay=0.01,
     max_grad_norm=1.0,
     evaluation_strategy='steps',
     # save_strategy='epoch',  # The model and tokenizer will be saved at the end of each epoch
     save_steps=10000,
     warmup_steps=500,
-    fp16 = True
+    # fp16 = True,
+    # gradient_checkpointing=True
 )
+
 
 trainer = Trainer(
     model=model,
@@ -87,18 +92,21 @@ trainer = Trainer(
     eval_dataset=valid_dataset,
     data_collator=data_collator
 )
-print_gpu_utilization()
+
 
 def empty_cache():
     gc.collect()
     if torch.cuda.is_available():
         torch.cuda.empty_cache()  # Clear GPU cache before training
 
+
 try:
     empty_cache()
+    print_gpu_utilization()
     trainer.train(resume_from_checkpoint=CHECKPOINT)
 finally:
     empty_cache()
+    print_gpu_utilization()
     evaluation_results = trainer.evaluate()
 
     print("Evaluation Loss: ", evaluation_results["eval_loss"])
