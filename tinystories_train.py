@@ -9,6 +9,7 @@ from settings import MAX_LENGTH, END_OF_TEXT
 import gc
 import pynvml
 from optimum.bettertransformer import BetterTransformer
+from tqdm import tqdm
 
 def print_gpu_utilization():
     pynvml.nvmlInit()
@@ -44,9 +45,11 @@ configuration = GPTNeoConfig(
 
 print_gpu_utilization()
 
+device = 'cuda'
+
 # Create a new model
 model = GPTNeoForCausalLM(configuration)
-model.to('cuda')
+model.to(device)
 model = BetterTransformer.transform(model)
 
 print_gpu_utilization()
@@ -84,7 +87,7 @@ training_args = TrainingArguments(
     # gradient_checkpointing=True
 )
 
-
+"""
 trainer = Trainer(
     model=model,
     args=training_args,
@@ -92,7 +95,7 @@ trainer = Trainer(
     eval_dataset=valid_dataset,
     data_collator=data_collator
 )
-
+"""
 
 def empty_cache():
     gc.collect()
@@ -100,17 +103,82 @@ def empty_cache():
         torch.cuda.empty_cache()  # Clear GPU cache before training
 
 
+
+import torch
+from torch.utils.data import DataLoader
+from transformers import AdamW, get_linear_schedule_with_warmup
+
+def evaluate(model, eval_loader):
+    model.eval()
+    eval_loss = 0
+    with torch.no_grad():
+        for eval_batch in tqdm(eval_loader, desc="Eval"):
+            eval_batch = {k: v.to(device) for k, v in eval_batch.items()} 
+            eval_outputs = model(**eval_batch)
+            eval_loss += eval_outputs.loss.item()
+
+    eval_loss /= len(eval_loader)
+    return eval_loss
+
+
+def train(model, train_dataset, eval_dataset, training_args):
+    device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
+    model.to(device)
+
+    train_loader = DataLoader(train_dataset, batch_size=training_args.per_device_train_batch_size, shuffle=True, collate_fn=data_collator)
+    eval_loader = DataLoader(eval_dataset, batch_size=training_args.per_device_eval_batch_size, collate_fn=data_collator)
+
+    optimizer = AdamW(model.parameters(), weight_decay=training_args.weight_decay)
+    total_steps = len(train_loader) * training_args.num_train_epochs
+    scheduler = get_linear_schedule_with_warmup(optimizer, num_warmup_steps=training_args.warmup_steps, num_training_steps=total_steps)
+
+    global_step = 0
+    model.zero_grad()
+
+    for epoch in range(training_args.num_train_epochs):
+        for batch in tqdm(train_loader, desc="Training"):
+            print('train')
+            model.train()
+            batch = {k: v.to(device) for k, v in batch.items()}  
+            outputs = model(**batch)
+            loss = outputs.loss
+            loss.backward()
+
+            if global_step != 0 and global_step % training_args.gradient_accumulation_steps == 0:
+                print('gradient accum')
+                torch.nn.utils.clip_grad_norm_(model.parameters(), training_args.max_grad_norm)
+                optimizer.step()
+                scheduler.step()
+                model.zero_grad()
+
+            if global_step != 0 and global_step % training_args.eval_steps == 0:
+                print('eval')
+                eval_loss = evaluate(model, eval_loader)
+                print(f"Step: {global_step}, Eval Loss: {eval_loss}")
+
+            if global_step != 0 and global_step % training_args.save_steps == 0:
+                checkpoint_dir = f"{training_args.output_dir}/checkpoint-{global_step}"
+                # torch.save(model.state_dict(), f"{training_args.output_dir}/checkpoint-{global_step}.pt")
+                m = BetterTransformer.reverse(model)
+                m.save_pretrained(checkpoint_dir)
+                tokenizer.save_pretrained(checkpoint_dir)
+            global_step += 1
+
+
 try:
     empty_cache()
     print_gpu_utilization()
-    trainer.train(resume_from_checkpoint=CHECKPOINT)
+    # trainer.train(resume_from_checkpoint=CHECKPOINT)
+    train(model, train_dataset, valid_dataset, training_args)
 finally:
     empty_cache()
     print_gpu_utilization()
-    evaluation_results = trainer.evaluate()
-
+    # evaluation_results = trainer.evaluate()
+    eval_loader = DataLoader(valid_dataset, batch_size=training_args.per_device_eval_batch_size)
+    evaluation_results = evaluate(model, eval_loader)
     print("Evaluation Loss: ", evaluation_results["eval_loss"])
     torch.cuda.empty_cache()  # Clear GPU cache after training
 
+    model = BetterTransformer.reverse(model)
     model.save_pretrained("./results")
     tokenizer.save_pretrained("./results")
