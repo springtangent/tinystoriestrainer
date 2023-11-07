@@ -208,7 +208,96 @@ configuration_34m = LlamaConfig(
 	attention_bias = False
 )
 
-configuration = configuration_51m
+configuration_25m = LlamaConfig(
+	vocab_size = tokenizer.vocab_size,
+	hidden_size = 256,
+	intermediate_size = 11008//4,
+	num_hidden_layers = 4,
+	num_attention_heads = 4,
+	num_key_value_heads = None,
+	hidden_act = 'silu',
+	max_position_embeddings = settings.MAX_LENGTH,
+	initializer_range = 0.02,
+	rms_norm_eps = 1e-06,
+	use_cache = True,
+	pad_token_id = None,
+	bos_token_id = 1,
+	eos_token_id = 2,
+	pretraining_tp = 1,
+	tie_word_embeddings = False,
+	rope_theta = 10000.0,
+	rope_scaling = None,
+	attention_bias = False
+)
+
+configuration_21m = LlamaConfig(
+	vocab_size = tokenizer.vocab_size,
+	hidden_size = 256,
+	intermediate_size = 11008//4,
+	num_hidden_layers = 2,
+	num_attention_heads = 2,
+	num_key_value_heads = None,
+	hidden_act = 'silu',
+	max_position_embeddings = settings.MAX_LENGTH,
+	initializer_range = 0.02,
+	rms_norm_eps = 1e-06,
+	use_cache = True,
+	pad_token_id = None,
+	bos_token_id = 1,
+	eos_token_id = 2,
+	pretraining_tp = 1,
+	tie_word_embeddings = False,
+	rope_theta = 10000.0,
+	rope_scaling = None,
+	attention_bias = False
+)
+
+
+configuration_19m = LlamaConfig(
+	vocab_size = tokenizer.vocab_size,
+	hidden_size = 256,
+	intermediate_size = 11008//8,
+	num_hidden_layers = 2,
+	num_attention_heads = 2,
+	num_key_value_heads = None,
+	hidden_act = 'silu',
+	max_position_embeddings = settings.MAX_LENGTH,
+	initializer_range = 0.02,
+	rms_norm_eps = 1e-06,
+	use_cache = True,
+	pad_token_id = None,
+	bos_token_id = 1,
+	eos_token_id = 2,
+	pretraining_tp = 1,
+	tie_word_embeddings = False,
+	rope_theta = 10000.0,
+	rope_scaling = None,
+	attention_bias = False
+)
+
+configuration_9m = LlamaConfig(
+	vocab_size = tokenizer.vocab_size,
+	hidden_size = 128,
+	intermediate_size = 11008//8,
+	num_hidden_layers = 2,
+	num_attention_heads = 2,
+	num_key_value_heads = None,
+	hidden_act = 'silu',
+	max_position_embeddings = settings.MAX_LENGTH,
+	initializer_range = 0.02,
+	rms_norm_eps = 1e-06,
+	use_cache = True,
+	pad_token_id = None,
+	bos_token_id = 1,
+	eos_token_id = 2,
+	pretraining_tp = 1,
+	tie_word_embeddings = False,
+	rope_theta = 10000.0,
+	rope_scaling = None,
+	attention_bias = False
+)
+
+configuration = configuration_19m
 
 # Initializing a model from the llama-7b style configuration, or from pretrained if CHECKPOINT.
 if CHECKPOINT:
@@ -253,7 +342,7 @@ trainer = Trainer(
 
 results = None
 try:
-	results = trainer.train()
+	results = trainer.train(resume_from_checkpoint=CHECKPOINT)
 except:
 	model.save_pretrained("./saved_model")
 	tokenizer.save_pretrained("./saved_model")
