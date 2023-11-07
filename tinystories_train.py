@@ -24,7 +24,6 @@ def print_summary(result):
     print_gpu_utilization()
 
 
-
 CHECKPOINT = None # 'results/checkpoint-684000'
 
 # This matchs the TinyStories-1M configuration
@@ -48,7 +47,10 @@ print_gpu_utilization()
 device = 'cuda'
 
 # Create a new model
-model = GPTNeoForCausalLM(configuration)
+if not CHECKPOINT:
+    model = GPTNeoForCausalLM(configuration)
+else:
+    model = GPTNeoForCausalLM.from_pretrained(f'./results/{CHECKPOINT}')
 model.to(device)
 model = BetterTransformer.transform(model)
 
@@ -76,26 +78,14 @@ training_args = TrainingArguments(
     gradient_accumulation_steps=2,
     per_device_train_batch_size=2,
     per_device_eval_batch_size=2,
-    eval_steps=10000,
+    eval_steps=40000,
     weight_decay=0.01,
     max_grad_norm=1.0,
     evaluation_strategy='steps',
-    # save_strategy='epoch',  # The model and tokenizer will be saved at the end of each epoch
     save_steps=10000,
-    warmup_steps=500,
-    # fp16 = True,
-    # gradient_checkpointing=True
+    warmup_steps=500
 )
 
-"""
-trainer = Trainer(
-    model=model,
-    args=training_args,
-    train_dataset=train_dataset,
-    eval_dataset=valid_dataset,
-    data_collator=data_collator
-)
-"""
 
 def empty_cache():
     gc.collect()
@@ -107,6 +97,10 @@ def empty_cache():
 import torch
 from torch.utils.data import DataLoader
 from transformers import AdamW, get_linear_schedule_with_warmup
+from torch.optim import AdamW
+
+# Initialize the AdamW optimizer with weight decay
+optimizer = AdamW(model.parameters(), lr=1e-5, weight_decay=training_args.weight_decay)
 
 def evaluate(model, eval_loader):
     model.eval()
@@ -133,9 +127,14 @@ def train(model, train_dataset, eval_dataset, training_args):
     scheduler = get_linear_schedule_with_warmup(optimizer, num_warmup_steps=training_args.warmup_steps, num_training_steps=total_steps)
 
     global_step = 0
+    start_epoch = 0
+
+    if CHECKPOINT:
+        start_epoch, best_val_loss, global_step = load_most_recent_checkpoint(model, optimizer, scheduler)
+        
     model.zero_grad()
 
-    for epoch in range(training_args.num_train_epochs):
+    for epoch in range(start_epoch, training_args.num_train_epochs):
         for batch in tqdm(train_loader, desc="Training"):
             print('train')
             model.train()
