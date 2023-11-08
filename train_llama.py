@@ -13,8 +13,8 @@ logging.basicConfig(level=logging.DEBUG)
 pynvml.nvmlInit()
 
 
-CHECKPOINT = None # 'checkpoint-70000'
-results_directory = './results'
+CHECKPOINT = 'checkpoint-50000' # 'checkpoint-70000'
+results_directory = 'results'
 DEVICE = 'cuda'
 tokenizer = settings.tokenizer
 tokenizer.pad_token = tokenizer.eos_token
@@ -297,7 +297,7 @@ configuration_9m = LlamaConfig(
 	attention_bias = False
 )
 
-configuration = configuration_19m
+configuration = configuration_9m
 
 # Initializing a model from the llama-7b style configuration, or from pretrained if CHECKPOINT.
 if CHECKPOINT:
@@ -342,8 +342,10 @@ trainer = Trainer(
 
 results = None
 try:
-	results = trainer.train(resume_from_checkpoint=CHECKPOINT)
+	results = trainer.train(resume_from_checkpoint=f'{results_directory}/{CHECKPOINT}')
 except:
+	raise
+finally:
 	model.save_pretrained("./saved_model")
 	tokenizer.save_pretrained("./saved_model")
 	# training_args.save_to_json("./saved_model/training_args.json")
