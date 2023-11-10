@@ -1,6 +1,7 @@
 from transformers import LlamaForCausalLM, LlamaConfig, LlamaTokenizer, TrainingArguments, Trainer, DataCollatorForLanguageModeling
-from datasets import load_from_disk, DatasetDict, Features, Value, Sequence
+from datasets import load_from_disk, DatasetDict
 from torch.utils.data import DataLoader
+import torch
 import pynvml
 import json
 from tqdm import tqdm
@@ -12,21 +13,16 @@ logging.basicConfig(level=logging.DEBUG)
 
 pynvml.nvmlInit()
 
-
-CHECKPOINT = 'checkpoint-50000' # 'checkpoint-70000'
-results_directory = 'results'
+INPUT_MODEL = None # './saved_model'
+OUTPUT_MODEL = './saved_model_fp16'
+CHECKPOINT = None # 'checkpoint-690000' # 'checkpoint-70000'
+results_directory = 'results_fp16'
 DEVICE = 'cuda'
 tokenizer = settings.tokenizer
 tokenizer.pad_token = tokenizer.eos_token
 dataset_name = 'prepared_tinystories2'
 train_dataset_name = 'train'
 validation_dataset_name = 'valid'
-features = Features({
-    'input_ids': Sequence(feature=Value(dtype='int32')),
-    'attention_mask': Sequence(feature=Value(dtype='int32')),
-    # Define other features if you have them
-})
-
 
 
 def print_gpu_utilization():
@@ -99,6 +95,28 @@ configuration_3b = LlamaConfig(
 )
 
 configuration_1b = LlamaConfig(
+	vocab_size = tokenizer.vocab_size,
+	hidden_size = 1536,
+	intermediate_size = 11008//2,
+	num_hidden_layers = 24,
+	num_attention_heads = 32,
+	num_key_value_heads = None,
+	hidden_act = 'silu',
+	max_position_embeddings = settings.MAX_LENGTH,
+	initializer_range = 0.02,
+	rms_norm_eps = 1e-06,
+	use_cache = True,
+	pad_token_id = None,
+	bos_token_id = 1,
+	eos_token_id = 2,
+	pretraining_tp = 1,
+	tie_word_embeddings = False,
+	rope_theta = 10000.0,
+	rope_scaling = None,
+	attention_bias = False
+)
+
+configuration_1500m = LlamaConfig(
 	vocab_size = tokenizer.vocab_size,
 	hidden_size = 1536,
 	intermediate_size = 11008,
@@ -297,12 +315,12 @@ configuration_9m = LlamaConfig(
 	attention_bias = False
 )
 
-configuration = configuration_9m
+configuration = configuration_1b
 
 # Initializing a model from the llama-7b style configuration, or from pretrained if CHECKPOINT.
-if CHECKPOINT:
+if CHECKPOINT or INPUT_MODEL:
 	print('loading checkpoint')
-	model = LlamaForCausalLM.from_pretrained(f'{results_directory}/{CHECKPOINT}')
+	model = LlamaForCausalLM.from_pretrained(INPUT_MODEL or f'{results_directory}/{CHECKPOINT}')
 else:
 	model = LlamaForCausalLM(configuration)
     
@@ -325,11 +343,14 @@ training_args = TrainingArguments(
     eval_steps=100000,
     weight_decay=0.01,
     max_grad_norm=1.0,
-    evaluation_strategy='steps',
+    evaluation_strategy='no',
     save_steps=10000,
-    warmup_steps=500
+    warmup_steps=500,
+    fp16=True
 )
 
+
+optimizer = torch.optim.AdamW(model.parameters(), lr=5e-5)
 data_collator = DataCollatorForLanguageModeling(tokenizer=tokenizer, mlm=False)
 
 trainer = Trainer(
@@ -337,18 +358,18 @@ trainer = Trainer(
     args=training_args,
     train_dataset=dataset[train_dataset_name],
     eval_dataset=dataset[validation_dataset_name],
-    data_collator=data_collator
+    data_collator=data_collator,
+    optimizers=(optimizer, None)
 )
 
 results = None
 try:
-	results = trainer.train(resume_from_checkpoint=f'{results_directory}/{CHECKPOINT}')
+	results = trainer.train(resume_from_checkpoint=f'{results_directory}/{CHECKPOINT}' if (CHECKPOINT and not INPUT_MODEL) else None)
 except:
 	raise
 finally:
-	model.save_pretrained("./saved_model")
-	tokenizer.save_pretrained("./saved_model")
-	# training_args.save_to_json("./saved_model/training_args.json")
+	model.save_pretrained(OUTPUT_MODEL)
+	tokenizer.save_pretrained(OUTPUT_MODEL)
 	if results:
-		with open('./saved_model/training_results.json', 'w') as result_file:
+		with open(f'{OUTPUT_MODEL}/training_results.json', 'w') as result_file:
 		    json.dump(results, result_file)
