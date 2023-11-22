@@ -13,16 +13,18 @@ logging.basicConfig(level=logging.DEBUG)
 
 pynvml.nvmlInit()
 
-INPUT_MODEL = None # './saved_model'
-OUTPUT_MODEL = './saved_model_fp16'
-CHECKPOINT = None # 'checkpoint-690000' # 'checkpoint-70000'
-results_directory = 'results_fp16'
+INPUT_MODEL = None # './saved_model_fp16_3'
+OUTPUT_MODEL = './saved_model'
+CHECKPOINT = None # 'checkpoint-70000'
+results_directory = 'results'
 DEVICE = 'cuda'
 tokenizer = settings.tokenizer
 tokenizer.pad_token = tokenizer.eos_token
-dataset_name = 'prepared_tinystories2'
+dataset_name = 'prepared_wikipedia_en'
 train_dataset_name = 'train'
-validation_dataset_name = 'valid'
+validation_dataset_name = 'test'
+START_LEARNING_RATE = 5e-5
+TRAINING_EPOCHS = 4
 
 
 def print_gpu_utilization():
@@ -317,10 +319,16 @@ configuration_9m = LlamaConfig(
 
 configuration = configuration_1b
 
+LOAD_FROM = INPUT_MODEL or f'{results_directory}/{CHECKPOINT}'
+CHECKPOINT = None if INPUT_MODEL else f'{results_directory}/{CHECKPOINT}'
+
 # Initializing a model from the llama-7b style configuration, or from pretrained if CHECKPOINT.
 if CHECKPOINT or INPUT_MODEL:
-	print('loading checkpoint')
-	model = LlamaForCausalLM.from_pretrained(INPUT_MODEL or f'{results_directory}/{CHECKPOINT}')
+	if INPUT_MODEL:
+		print('loading pretrained model')
+	else:
+		print('loading checkpoint')
+	model = LlamaForCausalLM.from_pretrained(LOAD_FROM)
 else:
 	model = LlamaForCausalLM(configuration)
     
@@ -336,16 +344,17 @@ dataset_metrics(dataset)
 training_args = TrainingArguments(
     output_dir=results_directory,
     overwrite_output_dir=True,
-    num_train_epochs=1,
-    gradient_accumulation_steps=2,
-    per_device_train_batch_size=2,
-    per_device_eval_batch_size=2,
+    num_train_epochs=TRAINING_EPOCHS,
+    gradient_accumulation_steps=4,
+    per_device_train_batch_size=1,
+    per_device_eval_batch_size=1,
     eval_steps=100000,
     weight_decay=0.01,
     max_grad_norm=1.0,
     evaluation_strategy='no',
-    save_steps=10000,
+    save_steps=1000,
     warmup_steps=500,
+    learning_rate=START_LEARNING_RATE,
     fp16=True
 )
 
@@ -364,7 +373,7 @@ trainer = Trainer(
 
 results = None
 try:
-	results = trainer.train(resume_from_checkpoint=f'{results_directory}/{CHECKPOINT}' if (CHECKPOINT and not INPUT_MODEL) else None)
+	results = trainer.train(resume_from_checkpoint=CHECKPOINT)
 except:
 	raise
 finally:
