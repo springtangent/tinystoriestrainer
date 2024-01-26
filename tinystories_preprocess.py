@@ -10,11 +10,13 @@ VALID_PATH = 'TinyStoriesV2-GPT4-valid.txt'
 
 
 # Define the features of your dataset
+"""
 features = Features({
     'input_ids': Sequence(feature=Value(dtype='int32')),
     'attention_mask': Sequence(feature=Value(dtype='int32')),
     # Define other features if you have them
 })
+"""
 
 
 def load_stories(path: str):
@@ -35,8 +37,8 @@ def load_stories(path: str):
 def create_dataset(path: str, padding_option):
     stories = list(tqdm(load_stories(path), desc="Loading Stories"))
     dataset = Dataset.from_list([{'text': text} for text in stories])
-    dataset = dataset.map(lambda examples: tokenizer(examples['text'], truncation=True, padding=padding_option, max_length=MAX_LENGTH), batched=True, remove_columns=["text"])
-    dataset.cast(features)
+    dataset = dataset.map(lambda examples: tokenizer(examples['text'], truncation=True, padding=padding_option, max_length=MAX_LENGTH), batched=True, remove_columns=["text"], num_proc=8)
+    # dataset.cast(features)
     return dataset
 
 

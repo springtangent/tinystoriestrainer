@@ -1,6 +1,7 @@
 from transformers import LlamaForCausalLM, LlamaConfig, LlamaTokenizer, TrainingArguments, Trainer, DataCollatorForLanguageModeling
-from datasets import load_from_disk, DatasetDict, Features, Value, Sequence
+from datasets import load_from_disk, DatasetDict
 from torch.utils.data import DataLoader
+import torch
 import pynvml
 import json
 from tqdm import tqdm
@@ -12,21 +13,23 @@ logging.basicConfig(level=logging.DEBUG)
 
 pynvml.nvmlInit()
 
+<<<<<<< HEAD
 
 CHECKPOINT = None # 'checkpoint-50000' # 'checkpoint-70000'
+=======
+INPUT_MODEL = None # './saved_model_fp16_3'
+OUTPUT_MODEL = './saved_model'
+CHECKPOINT = None # 'checkpoint-70000'
+>>>>>>> 013c18a96c523359febcaa095474247c70e425c1
 results_directory = 'results'
 DEVICE = 'cuda'
 tokenizer = settings.tokenizer
 tokenizer.pad_token = tokenizer.eos_token
-dataset_name = 'prepared_tinystories2'
+dataset_name = 'prepared_wikipedia_en'
 train_dataset_name = 'train'
-validation_dataset_name = 'valid'
-features = Features({
-    'input_ids': Sequence(feature=Value(dtype='int32')),
-    'attention_mask': Sequence(feature=Value(dtype='int32')),
-    # Define other features if you have them
-})
-
+validation_dataset_name = 'test'
+START_LEARNING_RATE = 5e-5
+TRAINING_EPOCHS = 4
 
 
 def print_gpu_utilization():
@@ -99,6 +102,28 @@ configuration_3b = LlamaConfig(
 )
 
 configuration_1b = LlamaConfig(
+	vocab_size = tokenizer.vocab_size,
+	hidden_size = 1536,
+	intermediate_size = 11008//2,
+	num_hidden_layers = 24,
+	num_attention_heads = 32,
+	num_key_value_heads = None,
+	hidden_act = 'silu',
+	max_position_embeddings = settings.MAX_LENGTH,
+	initializer_range = 0.02,
+	rms_norm_eps = 1e-06,
+	use_cache = True,
+	pad_token_id = None,
+	bos_token_id = 1,
+	eos_token_id = 2,
+	pretraining_tp = 1,
+	tie_word_embeddings = False,
+	rope_theta = 10000.0,
+	rope_scaling = None,
+	attention_bias = False
+)
+
+configuration_1500m = LlamaConfig(
 	vocab_size = tokenizer.vocab_size,
 	hidden_size = 1536,
 	intermediate_size = 11008,
@@ -319,18 +344,22 @@ dataset_metrics(dataset)
 training_args = TrainingArguments(
     output_dir=results_directory,
     overwrite_output_dir=True,
-    num_train_epochs=1,
-    gradient_accumulation_steps=2,
-    per_device_train_batch_size=2,
-    per_device_eval_batch_size=2,
+    num_train_epochs=TRAINING_EPOCHS,
+    gradient_accumulation_steps=4,
+    per_device_train_batch_size=1,
+    per_device_eval_batch_size=1,
     eval_steps=100000,
     weight_decay=0.01,
     max_grad_norm=1.0,
-    evaluation_strategy='steps',
-    save_steps=10000,
-    warmup_steps=500
+    evaluation_strategy='no',
+    save_steps=1000,
+    warmup_steps=500,
+    learning_rate=START_LEARNING_RATE,
+    fp16=True
 )
 
+
+optimizer = torch.optim.AdamW(model.parameters(), lr=5e-5)
 data_collator = DataCollatorForLanguageModeling(tokenizer=tokenizer, mlm=False)
 
 trainer = Trainer(
@@ -338,7 +367,8 @@ trainer = Trainer(
     args=training_args,
     train_dataset=dataset[train_dataset_name],
     eval_dataset=dataset[validation_dataset_name],
-    data_collator=data_collator
+    data_collator=data_collator,
+    optimizers=(optimizer, None)
 )
 
 results = None
@@ -347,9 +377,8 @@ try:
 except:
 	raise
 finally:
-	model.save_pretrained("./saved_model")
-	tokenizer.save_pretrained("./saved_model")
-	# training_args.save_to_json("./saved_model/training_args.json")
+	model.save_pretrained(OUTPUT_MODEL)
+	tokenizer.save_pretrained(OUTPUT_MODEL)
 	if results:
-		with open('./saved_model/training_results.json', 'w') as result_file:
+		with open(f'{OUTPUT_MODEL}/training_results.json', 'w') as result_file:
 		    json.dump(results, result_file)

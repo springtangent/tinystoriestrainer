@@ -83,7 +83,8 @@ training_args = TrainingArguments(
     max_grad_norm=1.0,
     evaluation_strategy='steps',
     save_steps=10000,
-    warmup_steps=500
+    warmup_steps=500,
+    fp16=True
 )
 
 
