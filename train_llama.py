@@ -13,7 +13,7 @@ logging.basicConfig(level=logging.DEBUG)
 pynvml.nvmlInit()
 
 
-CHECKPOINT = 'checkpoint-50000' # 'checkpoint-70000'
+CHECKPOINT = None # 'checkpoint-50000' # 'checkpoint-70000'
 results_directory = 'results'
 DEVICE = 'cuda'
 tokenizer = settings.tokenizer
@@ -297,12 +297,13 @@ configuration_9m = LlamaConfig(
 	attention_bias = False
 )
 
-configuration = configuration_9m
+configuration = configuration_1b
 
 # Initializing a model from the llama-7b style configuration, or from pretrained if CHECKPOINT.
+checkpoint_directory = f'{results_directory}/{CHECKPOINT}' if CHECKPOINT is not None else None
 if CHECKPOINT:
 	print('loading checkpoint')
-	model = LlamaForCausalLM.from_pretrained(f'{results_directory}/{CHECKPOINT}')
+	model = LlamaForCausalLM.from_pretrained(checkpoint_directory)
 else:
 	model = LlamaForCausalLM(configuration)
     
@@ -342,7 +343,7 @@ trainer = Trainer(
 
 results = None
 try:
-	results = trainer.train(resume_from_checkpoint=f'{results_directory}/{CHECKPOINT}')
+	results = trainer.train(resume_from_checkpoint=checkpoint_directory)
 except:
 	raise
 finally:
