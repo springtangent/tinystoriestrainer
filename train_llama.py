@@ -13,14 +13,8 @@ logging.basicConfig(level=logging.DEBUG)
 
 pynvml.nvmlInit()
 
-<<<<<<< HEAD
 
 CHECKPOINT = None # 'checkpoint-50000' # 'checkpoint-70000'
-=======
-INPUT_MODEL = None # './saved_model_fp16_3'
-OUTPUT_MODEL = './saved_model'
-CHECKPOINT = None # 'checkpoint-70000'
->>>>>>> 013c18a96c523359febcaa095474247c70e425c1
 results_directory = 'results'
 DEVICE = 'cuda'
 tokenizer = settings.tokenizer

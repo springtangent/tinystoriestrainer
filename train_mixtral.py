@@ -7,6 +7,7 @@ import json
 from tqdm import tqdm
 import settings
 import logging
+import gc
 
 logging.basicConfig(level=logging.DEBUG)
 
@@ -19,9 +20,9 @@ results_directory = 'mixtral_results'
 DEVICE = 'cuda'
 tokenizer = settings.tokenizer
 tokenizer.pad_token = tokenizer.eos_token
-dataset_name = 'prepared_tinystories2'
+dataset_name = 'prepared_autocoder'
 train_dataset_name = 'train'
-validation_dataset_name = 'valid'
+validation_dataset_name = None # 'valid'
 features = Features({
     'input_ids': Sequence(feature=Value(dtype='int32')),
     'attention_mask': Sequence(feature=Value(dtype='int32')),
@@ -57,12 +58,12 @@ def dataset_metrics(dataset):
 configuration_9m = MixtralConfig(
 	vocab_size = tokenizer.vocab_size,
 	hidden_size = 128,
-	intermediate_size = 1024,
+	intermediate_size = 256,
 	num_hidden_layers = 2,
 	num_attention_heads = 2,
 	num_key_value_heads = 2,
 	hidden_act = 'silu',
-	max_position_embeddings = settings.MAX_LENGTH,
+	max_position_embeddings = 2048,
 	initializer_range = 0.02,
 	rms_norm_eps = 1e-06,
 	use_cache = True,
@@ -73,7 +74,34 @@ configuration_9m = MixtralConfig(
 	tie_word_embeddings = False,
 	rope_theta = 10000.0,
 	rope_scaling = None,
-	attention_bias = False
+	attention_bias = False,
+	num_local_experts=4,
+	num_experts_per_tok=2
+)
+
+
+configuration_500m = MixtralConfig(
+	vocab_size = tokenizer.vocab_size,
+	hidden_size = 1024,
+	intermediate_size=2048,
+	num_hidden_layers = 9,
+	num_attention_heads = 8,
+	num_key_value_heads = 4,
+	hidden_act = 'silu',
+	max_position_embeddings = 2048,
+	initializer_range = 0.02,
+	rms_norm_eps = 1e-06,
+	use_cache = True,
+	pad_token_id = None,
+	bos_token_id = 1,
+	eos_token_id = 2,
+	pretraining_tp = 1,
+	tie_word_embeddings = False,
+	rope_theta = 10000.0,
+	rope_scaling = None,
+	attention_bias = False,
+	num_local_experts=8,
+	num_experts_per_tok=3
 )
 
 configuration = configuration_9m
@@ -98,7 +126,7 @@ dataset_metrics(dataset)
 training_args = TrainingArguments(
     output_dir=results_directory,
     overwrite_output_dir=True,
-    num_train_epochs=1,
+    num_train_epochs=5,
     gradient_accumulation_steps=4,
     per_device_train_batch_size=2,
     per_device_eval_batch_size=2,
@@ -107,7 +135,8 @@ training_args = TrainingArguments(
     max_grad_norm=1.0,
     evaluation_strategy='steps',
     save_steps=10000,
-    warmup_steps=500
+    warmup_steps=500,
+	fp16=True
 )
 
 data_collator = DataCollatorForLanguageModeling(tokenizer=tokenizer, mlm=False)
@@ -116,7 +145,7 @@ trainer = Trainer(
     model=model,
     args=training_args,
     train_dataset=dataset[train_dataset_name],
-    eval_dataset=dataset[validation_dataset_name],
+    eval_dataset=dataset[validation_dataset_name] if validation_dataset_name in dataset else None,
     data_collator=data_collator
 )
 

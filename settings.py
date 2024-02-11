@@ -1,5 +1,5 @@
-from transformers import LlamaTokenizer
+from transformers import AutoTokenizer
 
-tokenizer = LlamaTokenizer.from_pretrained('meta-llama/Llama-2-70b-chat')
+tokenizer = AutoTokenizer.from_pretrained("mistralai/Mixtral-8x7B-v0.1")
 END_OF_TEXT = '<|endoftext|>'
-MAX_LENGTH = 4096
+MAX_LENGTH = 2048
